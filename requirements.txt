@@ -1,0 +1,6 @@
+boto3==1.40.15
+pandas==2.3.3
+plotly==6.3.0
+python-dotenv==1.2.1
+python_docx==1.2.0
+streamlit==1.46.0
