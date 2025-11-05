@@ -64,19 +64,37 @@ def _export_figure_to_image_bytes(fig, width=800, height=450, scale=1):
     if not fig or not fig.data:
         return None
 
+    # Check if Kaleido is available
     try:
-        # Try using to_image first
-        img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale, engine="kaleido")
+        import kaleido
+        kaleido_available = True
+    except ImportError:
+        kaleido_available = False
+        print("  ⚠️  Warning: Kaleido package not found")
+
+    if not kaleido_available:
+        # Try to check if Plotly can detect Kaleido
+        try:
+            import plotly.io as pio
+            if hasattr(pio, 'kaleido') and hasattr(pio.kaleido, 'scope'):
+                kaleido_available = True
+        except:
+            pass
+
+    try:
+        # Try without specifying engine first (Plotly will try to find available engine)
+        img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale)
         return img_bytes
     except Exception as e1:
-        print(f"  ⚠️  Warning: Kaleido export failed: {e1}")
-        try:
-            # Try without specifying engine (let Plotly choose)
-            img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale)
-            return img_bytes
-        except Exception as e2:
-            print(f"  ⚠️  Warning: Alternative export method also failed: {e2}")
-            return None
+        print(f"  ⚠️  Warning: Image export failed: {e1}")
+        # If that fails, try explicitly with kaleido if available
+        if kaleido_available:
+            try:
+                img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale, engine="kaleido")
+                return img_bytes
+            except Exception as e2:
+                print(f"  ⚠️  Warning: Explicit Kaleido export also failed: {e2}")
+        return None
 
 # --- [NEW] Configuration for sections and time periods
 AVAILABLE_SECTIONS = {
