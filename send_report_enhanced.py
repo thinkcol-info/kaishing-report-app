@@ -25,6 +25,58 @@ from docx.oxml.shared import OxmlElement, qn
 # --- [UNCHANGED] Plotly imports
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
+
+# --- [NEW] Initialize Kaleido for image export
+def _initialize_kaleido():
+    """Initialize Kaleido with proper settings for Streamlit Cloud."""
+    try:
+        # Try to configure Kaleido scope if available
+        if hasattr(pio, 'kaleido') and hasattr(pio.kaleido, 'scope'):
+            # Remove problematic chromium args that can cause issues
+            if hasattr(pio.kaleido.scope, 'chromium_args'):
+                original_args = list(pio.kaleido.scope.chromium_args)
+                # Remove --disable-dev-shm-usage if present (can cause issues)
+                filtered_args = [arg for arg in original_args if arg != "--disable-dev-shm-usage"]
+                pio.kaleido.scope.chromium_args = tuple(filtered_args)
+
+            # Try to ensure Chrome is available (for Kaleido >= 1.0.0)
+            try:
+                import kaleido
+                if hasattr(kaleido, 'get_chrome_sync'):
+                    # This will download Chrome if not available
+                    kaleido.get_chrome_sync()
+            except Exception as chrome_error:
+                # Chrome download might fail on Streamlit Cloud, that's okay
+                print(f"  ℹ️  Note: Chrome download skipped: {chrome_error}")
+
+        return True
+    except Exception as e:
+        print(f"  ⚠️  Warning: Could not initialize Kaleido: {e}")
+        return False
+
+# Initialize on import
+_kaleido_initialized = _initialize_kaleido()
+
+# --- [NEW] Helper function to export Plotly figure to image bytes
+def _export_figure_to_image_bytes(fig, width=800, height=450, scale=1):
+    """Export Plotly figure to PNG image bytes with error handling."""
+    if not fig or not fig.data:
+        return None
+
+    try:
+        # Try using to_image first
+        img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale, engine="kaleido")
+        return img_bytes
+    except Exception as e1:
+        print(f"  ⚠️  Warning: Kaleido export failed: {e1}")
+        try:
+            # Try without specifying engine (let Plotly choose)
+            img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale)
+            return img_bytes
+        except Exception as e2:
+            print(f"  ⚠️  Warning: Alternative export method also failed: {e2}")
+            return None
 
 # --- [NEW] Configuration for sections and time periods
 AVAILABLE_SECTIONS = {
@@ -117,31 +169,37 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
         if 'fig_wau' in figures_dict and figures_dict['fig_wau'] and figures_dict['fig_wau'].data:
             doc.add_paragraph('Weekly Active Users (WAU) Trend:')
             # Save figure as image and add to document
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    img_path = tmp_file.name
-                img_bytes = figures_dict['fig_wau'].to_image(format="png", width=800, height=450, scale=1)
-                with open(img_path, 'wb') as f:
-                    f.write(img_bytes)
-                doc.add_picture(img_path, width=Inches(6))
-                os.remove(img_path)  # Clean up temp file
-            except Exception as e:
-                print(f"  ⚠️  Warning: Could not export fig_wau: {e}")
-                doc.add_paragraph('[Chart could not be exported]')
+            img_bytes = _export_figure_to_image_bytes(figures_dict['fig_wau'], width=800, height=450, scale=1)
+            if img_bytes:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                        img_path = tmp_file.name
+                    with open(img_path, 'wb') as f:
+                        f.write(img_bytes)
+                    doc.add_picture(img_path, width=Inches(6))
+                    os.remove(img_path)  # Clean up temp file
+                except Exception as e:
+                    print(f"  ⚠️  Warning: Could not save fig_wau image: {e}")
+                    doc.add_paragraph('[Chart could not be exported]')
+            else:
+                doc.add_paragraph('[Chart could not be exported - Kaleido not available]')
 
         if 'fig_heatmap' in figures_dict and figures_dict['fig_heatmap'] and figures_dict['fig_heatmap'].data:
             doc.add_paragraph('User Activity Heatmap (by Day and Hour):')
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    img_path = tmp_file.name
-                img_bytes = figures_dict['fig_heatmap'].to_image(format="png", width=800, height=450, scale=1)
-                with open(img_path, 'wb') as f:
-                    f.write(img_bytes)
-                doc.add_picture(img_path, width=Inches(6))
-                os.remove(img_path)
-            except Exception as e:
-                print(f"  ⚠️  Warning: Could not export fig_heatmap: {e}")
-                doc.add_paragraph('[Chart could not be exported]')
+            img_bytes = _export_figure_to_image_bytes(figures_dict['fig_heatmap'], width=800, height=450, scale=1)
+            if img_bytes:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                        img_path = tmp_file.name
+                    with open(img_path, 'wb') as f:
+                        f.write(img_bytes)
+                    doc.add_picture(img_path, width=Inches(6))
+                    os.remove(img_path)
+                except Exception as e:
+                    print(f"  ⚠️  Warning: Could not save fig_heatmap image: {e}")
+                    doc.add_paragraph('[Chart could not be exported]')
+            else:
+                doc.add_paragraph('[Chart could not be exported - Kaleido not available]')
 
     # Add adoption section if selected
     if 'adoption' in selected_sections:
@@ -149,17 +207,20 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
 
         if 'fig_site_activity' in figures_dict and figures_dict['fig_site_activity'] and figures_dict['fig_site_activity'].data:
             doc.add_paragraph('Activity Distribution by Site Code:')
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    img_path = tmp_file.name
-                img_bytes = figures_dict['fig_site_activity'].to_image(format="png", width=800, height=450, scale=1)
-                with open(img_path, 'wb') as f:
-                    f.write(img_bytes)
-                doc.add_picture(img_path, width=Inches(6))
-                os.remove(img_path)
-            except Exception as e:
-                print(f"  ⚠️  Warning: Could not export fig_site_activity: {e}")
-                doc.add_paragraph('[Chart could not be exported]')
+            img_bytes = _export_figure_to_image_bytes(figures_dict['fig_site_activity'], width=800, height=450, scale=1)
+            if img_bytes:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                        img_path = tmp_file.name
+                    with open(img_path, 'wb') as f:
+                        f.write(img_bytes)
+                    doc.add_picture(img_path, width=Inches(6))
+                    os.remove(img_path)
+                except Exception as e:
+                    print(f"  ⚠️  Warning: Could not save fig_site_activity image: {e}")
+                    doc.add_paragraph('[Chart could not be exported]')
+            else:
+                doc.add_paragraph('[Chart could not be exported - Kaleido not available]')
 
     # Add features section if selected
     if 'features' in selected_sections:
@@ -167,17 +228,20 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
 
         if 'fig_features' in figures_dict and figures_dict['fig_features'] and figures_dict['fig_features'].data:
             doc.add_paragraph('What Features Are Users Exploring?:')
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    img_path = tmp_file.name
-                img_bytes = figures_dict['fig_features'].to_image(format="png", width=800, height=450, scale=1)
-                with open(img_path, 'wb') as f:
-                    f.write(img_bytes)
-                doc.add_picture(img_path, width=Inches(6))
-                os.remove(img_path)
-            except Exception as e:
-                print(f"  ⚠️  Warning: Could not export fig_features: {e}")
-                doc.add_paragraph('[Chart could not be exported]')
+            img_bytes = _export_figure_to_image_bytes(figures_dict['fig_features'], width=800, height=450, scale=1)
+            if img_bytes:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                        img_path = tmp_file.name
+                    with open(img_path, 'wb') as f:
+                        f.write(img_bytes)
+                    doc.add_picture(img_path, width=Inches(6))
+                    os.remove(img_path)
+                except Exception as e:
+                    print(f"  ⚠️  Warning: Could not save fig_features image: {e}")
+                    doc.add_paragraph('[Chart could not be exported]')
+            else:
+                doc.add_paragraph('[Chart could not be exported - Kaleido not available]')
 
     # Add AskAI section if selected
     if 'askai' in selected_sections:
@@ -185,31 +249,37 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
 
         if 'fig_askai_sites' in figures_dict and figures_dict['fig_askai_sites'] and figures_dict['fig_askai_sites'].data:
             doc.add_paragraph('AskAI Pioneers: Adoption by Site:')
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    img_path = tmp_file.name
-                img_bytes = figures_dict['fig_askai_sites'].to_image(format="png", width=800, height=450, scale=1)
-                with open(img_path, 'wb') as f:
-                    f.write(img_bytes)
-                doc.add_picture(img_path, width=Inches(6))
-                os.remove(img_path)
-            except Exception as e:
-                print(f"  ⚠️  Warning: Could not export fig_askai_sites: {e}")
-                doc.add_paragraph('[Chart could not be exported]')
+            img_bytes = _export_figure_to_image_bytes(figures_dict['fig_askai_sites'], width=800, height=450, scale=1)
+            if img_bytes:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                        img_path = tmp_file.name
+                    with open(img_path, 'wb') as f:
+                        f.write(img_bytes)
+                    doc.add_picture(img_path, width=Inches(6))
+                    os.remove(img_path)
+                except Exception as e:
+                    print(f"  ⚠️  Warning: Could not save fig_askai_sites image: {e}")
+                    doc.add_paragraph('[Chart could not be exported]')
+            else:
+                doc.add_paragraph('[Chart could not be exported - Kaleido not available]')
 
         if 'fig_askai_keywords' in figures_dict and figures_dict['fig_askai_keywords'] and figures_dict['fig_askai_keywords'].data:
             doc.add_paragraph('What Are Users Asking? Top AskAI Keywords:')
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    img_path = tmp_file.name
-                img_bytes = figures_dict['fig_askai_keywords'].to_image(format="png", width=800, height=450, scale=1)
-                with open(img_path, 'wb') as f:
-                    f.write(img_bytes)
-                doc.add_picture(img_path, width=Inches(6))
-                os.remove(img_path)
-            except Exception as e:
-                print(f"  ⚠️  Warning: Could not export fig_askai_keywords: {e}")
-                doc.add_paragraph('[Chart could not be exported]')
+            img_bytes = _export_figure_to_image_bytes(figures_dict['fig_askai_keywords'], width=800, height=450, scale=1)
+            if img_bytes:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                        img_path = tmp_file.name
+                    with open(img_path, 'wb') as f:
+                        f.write(img_bytes)
+                    doc.add_picture(img_path, width=Inches(6))
+                    os.remove(img_path)
+                except Exception as e:
+                    print(f"  ⚠️  Warning: Could not save fig_askai_keywords image: {e}")
+                    doc.add_paragraph('[Chart could not be exported]')
+            else:
+                doc.add_paragraph('[Chart could not be exported - Kaleido not available]')
 
     # Save the document
     doc.save(output_path)
@@ -630,11 +700,14 @@ def send_email_with_charts(figures_dict, selected_sections, total_accounts, pro_
 
     for cid, required_section in figures_to_attach.items():
         if required_section in selected_sections and cid in figures_dict and figures_dict[cid] and figures_dict[cid].data:
-            image_bytes = figures_dict[cid].to_image(format="png", width=800, height=450, scale=1)
-            image = MIMEImage(image_bytes)
-            image.add_header('Content-ID', f'<{cid}>')
-            msg.attach(image)
-            print(f"  - Attached figure '{cid}'")
+            image_bytes = _export_figure_to_image_bytes(figures_dict[cid], width=800, height=450, scale=1)
+            if image_bytes:
+                image = MIMEImage(image_bytes)
+                image.add_header('Content-ID', f'<{cid}>')
+                msg.attach(image)
+                print(f"  - Attached figure '{cid}'")
+            else:
+                print(f"  ⚠️  Warning: Could not export figure '{cid}' for email")
 
     # Attach Word document if requested
     if include_word_attachment and word_file_path and os.path.exists(word_file_path):
