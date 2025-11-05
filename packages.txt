@@ -1,0 +1,12 @@
+# packages.txt
+
+# System dependencies required for Kaleido to run
+# These are for rendering graphics in a headless environment
+freeglut3-dev
+libgtk2.0-dev
+libgl1-mesa-glx
+libnss3
+libxss1
+libasound2
+libatk-bridge2.0-0
+libgtk-3-0
