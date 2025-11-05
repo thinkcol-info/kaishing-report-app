@@ -10,6 +10,7 @@ import smtplib
 import io
 import argparse
 import json
+import tempfile
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
@@ -116,17 +117,31 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
         if 'fig_wau' in figures_dict and figures_dict['fig_wau'] and figures_dict['fig_wau'].data:
             doc.add_paragraph('Weekly Active Users (WAU) Trend:')
             # Save figure as image and add to document
-            img_path = 'temp_wau.png'
-            figures_dict['fig_wau'].write_image(img_path, width=800, height=450, scale=1)
-            doc.add_picture(img_path, width=Inches(6))
-            os.remove(img_path)  # Clean up temp file
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    img_path = tmp_file.name
+                img_bytes = figures_dict['fig_wau'].to_image(format="png", width=800, height=450, scale=1)
+                with open(img_path, 'wb') as f:
+                    f.write(img_bytes)
+                doc.add_picture(img_path, width=Inches(6))
+                os.remove(img_path)  # Clean up temp file
+            except Exception as e:
+                print(f"  ⚠️  Warning: Could not export fig_wau: {e}")
+                doc.add_paragraph('[Chart could not be exported]')
 
         if 'fig_heatmap' in figures_dict and figures_dict['fig_heatmap'] and figures_dict['fig_heatmap'].data:
             doc.add_paragraph('User Activity Heatmap (by Day and Hour):')
-            img_path = 'temp_heatmap.png'
-            figures_dict['fig_heatmap'].write_image(img_path, width=800, height=450, scale=1)
-            doc.add_picture(img_path, width=Inches(6))
-            os.remove(img_path)
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    img_path = tmp_file.name
+                img_bytes = figures_dict['fig_heatmap'].to_image(format="png", width=800, height=450, scale=1)
+                with open(img_path, 'wb') as f:
+                    f.write(img_bytes)
+                doc.add_picture(img_path, width=Inches(6))
+                os.remove(img_path)
+            except Exception as e:
+                print(f"  ⚠️  Warning: Could not export fig_heatmap: {e}")
+                doc.add_paragraph('[Chart could not be exported]')
 
     # Add adoption section if selected
     if 'adoption' in selected_sections:
@@ -134,10 +149,17 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
 
         if 'fig_site_activity' in figures_dict and figures_dict['fig_site_activity'] and figures_dict['fig_site_activity'].data:
             doc.add_paragraph('Activity Distribution by Site Code:')
-            img_path = 'temp_site_activity.png'
-            figures_dict['fig_site_activity'].write_image(img_path, width=800, height=450, scale=1)
-            doc.add_picture(img_path, width=Inches(6))
-            os.remove(img_path)
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    img_path = tmp_file.name
+                img_bytes = figures_dict['fig_site_activity'].to_image(format="png", width=800, height=450, scale=1)
+                with open(img_path, 'wb') as f:
+                    f.write(img_bytes)
+                doc.add_picture(img_path, width=Inches(6))
+                os.remove(img_path)
+            except Exception as e:
+                print(f"  ⚠️  Warning: Could not export fig_site_activity: {e}")
+                doc.add_paragraph('[Chart could not be exported]')
 
     # Add features section if selected
     if 'features' in selected_sections:
@@ -145,10 +167,17 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
 
         if 'fig_features' in figures_dict and figures_dict['fig_features'] and figures_dict['fig_features'].data:
             doc.add_paragraph('What Features Are Users Exploring?:')
-            img_path = 'temp_features.png'
-            figures_dict['fig_features'].write_image(img_path, width=800, height=450, scale=1)
-            doc.add_picture(img_path, width=Inches(6))
-            os.remove(img_path)
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    img_path = tmp_file.name
+                img_bytes = figures_dict['fig_features'].to_image(format="png", width=800, height=450, scale=1)
+                with open(img_path, 'wb') as f:
+                    f.write(img_bytes)
+                doc.add_picture(img_path, width=Inches(6))
+                os.remove(img_path)
+            except Exception as e:
+                print(f"  ⚠️  Warning: Could not export fig_features: {e}")
+                doc.add_paragraph('[Chart could not be exported]')
 
     # Add AskAI section if selected
     if 'askai' in selected_sections:
@@ -156,17 +185,31 @@ def create_word_document(figures_dict, selected_sections, total_accounts, pro_us
 
         if 'fig_askai_sites' in figures_dict and figures_dict['fig_askai_sites'] and figures_dict['fig_askai_sites'].data:
             doc.add_paragraph('AskAI Pioneers: Adoption by Site:')
-            img_path = 'temp_askai_sites.png'
-            figures_dict['fig_askai_sites'].write_image(img_path, width=800, height=450, scale=1)
-            doc.add_picture(img_path, width=Inches(6))
-            os.remove(img_path)
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    img_path = tmp_file.name
+                img_bytes = figures_dict['fig_askai_sites'].to_image(format="png", width=800, height=450, scale=1)
+                with open(img_path, 'wb') as f:
+                    f.write(img_bytes)
+                doc.add_picture(img_path, width=Inches(6))
+                os.remove(img_path)
+            except Exception as e:
+                print(f"  ⚠️  Warning: Could not export fig_askai_sites: {e}")
+                doc.add_paragraph('[Chart could not be exported]')
 
         if 'fig_askai_keywords' in figures_dict and figures_dict['fig_askai_keywords'] and figures_dict['fig_askai_keywords'].data:
             doc.add_paragraph('What Are Users Asking? Top AskAI Keywords:')
-            img_path = 'temp_askai_keywords.png'
-            figures_dict['fig_askai_keywords'].write_image(img_path, width=800, height=450, scale=1)
-            doc.add_picture(img_path, width=Inches(6))
-            os.remove(img_path)
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    img_path = tmp_file.name
+                img_bytes = figures_dict['fig_askai_keywords'].to_image(format="png", width=800, height=450, scale=1)
+                with open(img_path, 'wb') as f:
+                    f.write(img_bytes)
+                doc.add_picture(img_path, width=Inches(6))
+                os.remove(img_path)
+            except Exception as e:
+                print(f"  ⚠️  Warning: Could not export fig_askai_keywords: {e}")
+                doc.add_paragraph('[Chart could not be exported]')
 
     # Save the document
     doc.save(output_path)
