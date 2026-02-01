@@ -49,17 +49,18 @@ def filter_df_by_range(df, start_date, end_date, date_col='createdAt'):
     return df[mask].copy()
 
 
-def build_figures_and_render(account_df, usage_df, askai_df):
-    total_accounts = len(account_df)
+def build_figures_and_render(account_df, usage_df, askai_df, transcription_df, site_code_map):
     subscription_counts = account_df['subscription_level'].value_counts(dropna=False)
     pro_users = subscription_counts.get('pro', 0)
     team_users = subscription_counts.get('team', 0)
+    total_accounts = pro_users + team_users
 
     st.subheader("Overall Platform Statistics")
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Active Accounts", f"{total_accounts}")
     c2.metric("Pro Tier Users", f"{pro_users}")
     c3.metric("Team Tier Users", f"{team_users}")
+    st.caption("Please note: totals are not filtered by time period.")
 
     # Figures to reuse for exports
     fig_wau = go.Figure()
@@ -118,10 +119,77 @@ def build_figures_and_render(account_df, usage_df, askai_df):
         )
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-    fig_site_activity = go.Figure()
-    if not usage_df.empty and 'site_code' in usage_df.columns:
-        activity_by_site = usage_df['site_code'].value_counts().reset_index()
+        fig_site_activity = go.Figure()
+        if not usage_df.empty and not account_df.empty:
+        # Mimic build_summary_df logic to count only matched activities per account
+        # Step 1: Get accounts
+            accounts = account_df[['account']].drop_duplicates()
+
+        # Generated transcripts (from transcription_df)
+        if not transcription_df.empty and 'account' in transcription_df.columns:
+            gen_trans = transcription_df.groupby('account').size().reset_index(name='generated transcripts')
+        else:
+            gen_trans = pd.DataFrame(columns=['account', 'generated transcripts'])
+
+        # Regenerated transcripts (regex on usage_type)
+        if 'usage_type' in usage_df.columns:
+            regen_trans_patterns = usage_df[usage_df['usage_type'].str.contains('regenerate.*transcript', case=False, na=False)]
+            regen_trans = regen_trans_patterns.groupby('account').size().reset_index(name='regenerated transcripts') if not regen_trans_patterns.empty else pd.DataFrame(columns=['account', 'regenerated transcripts'])
+        else:
+            regen_trans = pd.DataFrame(columns=['account', 'regenerated transcripts'])
+
+        # Initial summaries
+        if 'usage_type' in usage_df.columns:
+            init_sum_patterns = usage_df[usage_df['usage_type'].str.contains('initial.*summary|generate.*summary', case=False, na=False) &
+                                         ~usage_df['usage_type'].str.contains('regenerate', case=False, na=False)]
+            init_sum = init_sum_patterns.groupby('account').size().reset_index(name='initial summaries') if not init_sum_patterns.empty else pd.DataFrame(columns=['account', 'initial summaries'])
+        else:
+            init_sum = pd.DataFrame(columns=['account', 'initial summaries'])
+
+        # Regenerated summaries
+        if 'usage_type' in usage_df.columns:
+            regen_sum_patterns = usage_df[usage_df['usage_type'].str.contains('regenerate.*summary', case=False, na=False)]
+            regen_sum = regen_sum_patterns.groupby('account').size().reset_index(name='regenerated summaries') if not regen_sum_patterns.empty else pd.DataFrame(columns=['account', 'regenerated summaries'])
+        else:
+            regen_sum = pd.DataFrame(columns=['account', 'regenerated summaries'])
+
+        # Generated notes
+        if 'usage_type' in usage_df.columns:
+            gen_notes_patterns = usage_df[usage_df['usage_type'].str.contains('generate.*note|initial.*note', case=False, na=False) &
+                                          ~usage_df['usage_type'].str.contains('regenerate', case=False, na=False)]
+            gen_notes = gen_notes_patterns.groupby('account').size().reset_index(name='generated notes') if not gen_notes_patterns.empty else pd.DataFrame(columns=['account', 'generated notes'])
+        else:
+            gen_notes = pd.DataFrame(columns=['account', 'generated notes'])
+
+        # Regenerated notes
+        if 'usage_type' in usage_df.columns:
+            regen_notes_patterns = usage_df[usage_df['usage_type'].str.contains('regenerate.*note', case=False, na=False)]
+            regen_notes = regen_notes_patterns.groupby('account').size().reset_index(name='regenerated notes') if not regen_notes_patterns.empty else pd.DataFrame(columns=['account', 'regenerated notes'])
+        else:
+            regen_notes = pd.DataFrame(columns=['account', 'regenerated notes'])
+
+        # AskAI questions (from askai_df)
+        if not askai_df.empty:
+            ask_cnt = askai_df.groupby('account').size().reset_index(name='askai questions')
+        else:
+            ask_cnt = pd.DataFrame(columns=['account', 'askai questions'])
+
+        # Merge all into per-account totals and sum activities
+        activity_per_account = accounts.merge(gen_trans, on='account', how='left') \
+                                       .merge(regen_trans, on='account', how='left') \
+                                       .merge(init_sum, on='account', how='left') \
+                                       .merge(regen_sum, on='account', how='left') \
+                                       .merge(gen_notes, on='account', how='left') \
+                                       .merge(regen_notes, on='account', how='left') \
+                                       .merge(ask_cnt, on='account', how='left').fillna(0)
+        activity_per_account['total_activities'] = activity_per_account.iloc[:, 1:].sum(axis=1).astype(int)
+
+        # Map to site_code and aggregate
+        activity_per_account['site_code'] = activity_per_account['account'].map(site_code_map).fillna('Unknown')
+        activity_by_site = activity_per_account.groupby('site_code')['total_activities'].sum().reset_index()
         activity_by_site.columns = ['site_code', 'action_count']
+
+        # Create the treemap (same as before)
         fig_site_activity = px.treemap(
             activity_by_site,
             path=[px.Constant("All Sites"), 'site_code'],
@@ -228,29 +296,74 @@ def main():
 
     users_to_exclude = ['kian.so@thinkcol.com', 'hetty.pun@thinkcol.com', 'adawan@kaishing.com.hk']
     site_code_map = {
-        'eddiecheuk@kaishing.com.hk': 'HQ-IT', 'ksitsupport@kaishing.com.hk': 'HQ-IT', 'aegeancoast@kaishing.com.hk': 'AC',
-        'dacychung@kaishing.com.hk': 'ICC', 'lewislam@kaishing.com.hk': 'ICC', 'Vcity@kaishing.com.hk': 'VCY',
-        'yohomidtown@kaishing.com.hk': 'YMT', 'leightonhill@supreme-mgt.com.hk': 'LH', 'riva@supreme-mgt.com.hk': 'RV',
-        'tpmm@kaishing.com.hk': 'TPMM', 'palmsprings@kaishing.com.hk': 'PS', 'castello@kaishing.com.hk': 'CAS',
-        'newtown3@kaishing.com.hk': 'NTP3R', 'millencity@kaishing.com.hk': 'M388', 'mounthaven@kaishing.com.hk': 'MH',
-        'victorwong@supreme-mgt.com.hk': 'UMA', 'epc@kaishing.com.hk': 'EPC-C', 'millencity5@kaishing.com.hk': 'MMC418',
-        'apm@kaishing.com.hk': 'MMC418', 'taipocentre@kaishing.com.hk': 'TPC', 'parkisland@kaishing.com.hk': 'PI',
-        'thewings3a@kaishing.com.hk': 'TW3A', 'pacificview@kaishing.com.hk': 'PV', 'cffy@chifufayuen.hk': 'CFFY',
-        '98hms@kaishing.com.hk': '98HMS', 'stanford@kaishing.com.hk': 'SFV', 'lepalais@kaishing.com.hk': 'LPS',
-        'avignon@kaishing.com.hk': 'AGN', 'pmt@kaishing.com.hk': 'PMT', 'mountregency@kaishing.com.hk': 'MR',
-        'somerset@kaishing.com.hk': 'SOM', 'emilyho@kaishing.com.hk': 'NTPI', 'garychan@kaishing.com.hk': 'CAC',
-        'dynastycourt@kaishing.com.hk': 'DC', 'eastpoint@kaishing.com.hk': 'EPCR', 'grandyoho@kaishing.com.hk': 'GYR',
-        'hillsborough@kaishing.com.hk': 'HC', 'kodakhouse11@kaishing.com.hk': 'KHII', 'oceanwings@kaishing.com.hk': 'OW',
-        'pokfulam@kaishing.com.hk': 'PG', 'royalpalms@kaishing.com.hk': 'RP', 'concerto@kaishing.com.hk': 'VC',
-        'brownieyu@kaishing.com.hk': 'AFFC', 'hlypm@kaishing.com.hk': 'HLY', 'thewings2@kaishing.com.hk': 'TW2',
-        'mayfair@kaishing.com.hk': 'MG', 'affc@kaishing.com.hk': 'AFFC', 'villabythepark@kaishing.com.hk': 'VP',
-        'celestecourt@kaishing.com.hk': 'CC', 'ls@kaishing.com.hk': 'LS', 'suntuenmun@kaishing.com.hk': 'STMC',
-        'lagrove@kaishing.com.hk': 'LG', 'yohowest@wespire.com.hk': 'YOW', 'yohohouse@wespire.com.hk': 'YOW',
-        'kennedy38@supreme-mgt.com.hk': 'K38', 'homantinhill@supreme-mgt.com.hk': 'HMT', 'landmarkn@kaishing.com.hk': 'LN',
-        'metroplaza@kaishing.com.hk': 'MP', 'yohomall-1@kaishing.com.hk': 'YM1', 'ylplaza@kaishing.com.hk': 'YLP',
-        'kingspark@kaishing.com.hk': 'KPV', 'candicewong@kaishing.com.hk': 'KCC', 'rhapsody@kaishing.com.hk': 'VR',
-        'lgar@kaishing.com.hk': 'LGAR', 'rseacrest@kaishing.com.hk': 'RSC', 'yukpocourt@kaishing.com.hk': 'YPC',
-        'villaathena@kaishing.com.hk': 'VA', 'vincenttse@supreme-mgt.com.hk': 'VY'
+        'eddiecheuk@kaishing.com.hk': 'HQ-IT',
+        'ksitsupport@kaishing.com.hk': 'HQ-IT',
+        'aegeancoast@kaishing.com.hk': 'AC',
+        'dacychung@kaishing.com.hk': 'ICC',
+        'lewislam@kaishing.com.hk': 'ICC',
+        'Vcity@kaishing.com.hk': 'VCY',
+        'yohomidtown@kaishing.com.hk': 'YMT',
+        'leightonhill@supreme-mgt.com.hk': 'LH',
+        'riva@supreme-mgt.com.hk': 'RV',
+        'tpmm@kaishing.com.hk': 'TPMM',
+        'palmsprings@kaishing.com.hk': 'PS',
+        'castello@kaishing.com.hk': 'CAS',
+        'newtown3@kaishing.com.hk': 'NTP3R',
+        'millencity@kaishing.com.hk': 'M388',
+        'mounthaven@kaishing.com.hk': 'MH',
+        'victorwong@supreme-mgt.com.hk': 'UMA',
+        'epc@kaishing.com.hk': 'EPC-C',
+        'millencity5@kaishing.com.hk': 'MMC418',
+        'apm@kaishing.com.hk': 'MMC418',
+        'taipocentre@kaishing.com.hk': 'TPC',
+        'parkisland@kaishing.com.hk': 'PI',
+        'thewings3a@kaishing.com.hk': 'TW3A',
+        'pacificview@kaishing.com.hk': 'PV',
+        'cffy@chifufayuen.hk': 'CFFY',
+        '98hms@kaishing.com.hk': '98HMS',
+        'stanford@kaishing.com.hk': 'SFV',
+        'lepalais@kaishing.com.hk': 'LPS',
+        'avignon@kaishing.com.hk': 'AGN',
+        'pmt@kaishing.com.hk': 'PMT',
+        'mountregency@kaishing.com.hk': 'MR',
+        'somerset@kaishing.com.hk': 'SOM',
+        'emilyho@kaishing.com.hk': 'NTPI',
+        'garychan@kaishing.com.hk': 'CAC',
+        'dynastycourt@kaishing.com.hk': 'DC',
+        'eastpoint@kaishing.com.hk': 'EPCR',
+        'grandyoho@kaishing.com.hk': 'GYR',
+        'hillsborough@kaishing.com.hk': 'HC',
+        'kodakhouse11@kaishing.com.hk': 'KHII',
+        'oceanwings@kaishing.com.hk': 'OW',
+        'pokfulam@kaishing.com.hk': 'PG',
+        'royalpalms@kaishing.com.hk': 'RP',
+        'concerto@kaishing.com.hk': 'VC',
+        'brownieyu@kaishing.com.hk': 'AFFC',
+        'hlypm@kaishing.com.hk': 'HLY',
+        'thewings2@kaishing.com.hk': 'TW2',
+        'mayfair@kaishing.com.hk': 'MG',
+        'affc@kaishing.com.hk': 'AFFC',
+        'villabythepark@kaishing.com.hk': 'VP',
+        'celestecourt@kaishing.com.hk': 'CC',
+        'ls@kaishing.com.hk': 'LS',
+        'suntuenmun@kaishing.com.hk': 'STMC',
+        'lagrove@kaishing.com.hk': 'LG',
+        'yohowest@wespire.com.hk': 'YOW',
+        'yohohouse@wespire.com.hk': 'YOW',
+        'kennedy38@supreme-mgt.com.hk': 'K38',
+        'homantinhill@supreme-mgt.com.hk': 'HMT',
+        'landmarkn@kaishing.com.hk': 'LN',
+        'metroplaza@kaishing.com.hk': 'MP',
+        'yohomall-1@kaishing.com.hk': 'YM1',
+        'ylplaza@kaishing.com.hk': 'YLP',
+        'kingspark@kaishing.com.hk': 'KPV',
+        'candicewong@kaishing.com.hk': 'KCC',
+        'rhapsody@kaishing.com.hk': 'VR',
+        'lgar@kaishing.com.hk': 'LGAR',
+        'rseacrest@kaishing.com.hk': 'RSC',
+        'yukpocourt@kaishing.com.hk': 'YPC',
+        'villaathena@kaishing.com.hk': 'VA',
+        'vincenttse@supreme-mgt.com.hk': 'VY'
     }
 
     # Clean and enrich
@@ -270,7 +383,7 @@ def main():
     transcription_filtered = filter_df_by_range(transcription_df, start_dt.tz_localize('UTC'), end_dt.tz_localize('UTC')) if not transcription_df.empty else transcription_df
 
     # Render charts
-    figures, kpi_vals = build_figures_and_render(account_df, usage_filtered, askai_filtered)
+    figures, kpi_vals = build_figures_and_render(account_df, usage_filtered, askai_filtered, transcription_filtered, site_code_map)
 
     st.markdown("---")
     st.subheader("Downloads")
