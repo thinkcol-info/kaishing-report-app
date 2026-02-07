@@ -294,13 +294,13 @@ def main():
         askai_df = get_data_from_dynamodb("oak-ask-ai-ks", aws_key, aws_secret, aws_region)
         transcription_df = get_data_from_dynamodb("oak-transcription-ks", aws_key, aws_secret, aws_region)
 
-    users_to_exclude = ['kian.so@thinkcol.com', 'hetty.pun@thinkcol.com', 'adawan@kaishing.com.hk']
+    users_to_exclude = ['kian.so@thinkcol.com', 'hetty.pun@thinkcol.com', 'adawan@kaishing.com.hk','martyshi@kaishing-china.cn']
     site_code_map = {
         'eddiecheuk@kaishing.com.hk': 'HQ-IT',
         'ksitsupport@kaishing.com.hk': 'HQ-IT',
         'aegeancoast@kaishing.com.hk': 'AC',
         'dacychung@kaishing.com.hk': 'ICC',
-        'lewislam@kaishing.com.hk': 'ICC',
+        'myrawong@kaishing.com.hk': 'ICC',
         'Vcity@kaishing.com.hk': 'VCY',
         'yohomidtown@kaishing.com.hk': 'YMT',
         'leightonhill@supreme-mgt.com.hk': 'LH',
@@ -315,7 +315,6 @@ def main():
         'epc@kaishing.com.hk': 'EPC-C',
         'millencity5@kaishing.com.hk': 'MMC418',
         'apm@kaishing.com.hk': 'MMC418',
-        'taipocentre@kaishing.com.hk': 'TPC',
         'parkisland@kaishing.com.hk': 'PI',
         'thewings3a@kaishing.com.hk': 'TW3A',
         'pacificview@kaishing.com.hk': 'PV',
@@ -339,10 +338,10 @@ def main():
         'royalpalms@kaishing.com.hk': 'RP',
         'concerto@kaishing.com.hk': 'VC',
         'brownieyu@kaishing.com.hk': 'AFFC',
+        'affc@kaishing.com.hk': 'AFFC',
         'hlypm@kaishing.com.hk': 'HLY',
         'thewings2@kaishing.com.hk': 'TW2',
         'mayfair@kaishing.com.hk': 'MG',
-        'affc@kaishing.com.hk': 'AFFC',
         'villabythepark@kaishing.com.hk': 'VP',
         'celestecourt@kaishing.com.hk': 'CC',
         'ls@kaishing.com.hk': 'LS',
@@ -356,14 +355,28 @@ def main():
         'metroplaza@kaishing.com.hk': 'MP',
         'yohomall-1@kaishing.com.hk': 'YM1',
         'ylplaza@kaishing.com.hk': 'YLP',
+        'taipocentre@kaishing.com.hk': 'TPC',
+        'yukpocourt@kaishing.com.hk': 'YPC',
+        'vincenttse@supreme-mgt.com.hk': 'VY',
+        'metropolis@kaishing.com.hk': 'MPPR',
+        'seacrest4@kaishing.com.hk': 'SCV4',
+        'villaathena@kaishing.com.hk': 'VA',
         'kingspark@kaishing.com.hk': 'KPV',
         'candicewong@kaishing.com.hk': 'KCC',
         'rhapsody@kaishing.com.hk': 'VR',
         'lgar@kaishing.com.hk': 'LGAR',
         'rseacrest@kaishing.com.hk': 'RSC',
-        'yukpocourt@kaishing.com.hk': 'YPC',
-        'villaathena@kaishing.com.hk': 'VA',
-        'vincenttse@supreme-mgt.com.hk': 'VY'
+        'grandcentral@kaishing.com.hk': 'GCP',
+        'albany@kaishing.com.hk': 'ABY',
+        'vincentlam@kaishing.com.hk': 'BG',
+        'seacrest2@kaishing.com.hk': 'SCV2',
+        'seacrest3@kaishing.com.hk': 'SCV3',
+        'grandpacific@kaishing.com.hk': 'GPVH',
+        'bensun@wespire.com.hk': 'NOL',
+        'yohotown@kaishing.com.hk': 'YT',
+        'simonchan@kaishing.com.hk': 'CH',
+        'plazaascot@kaishing.com.hk': 'PZA',
+        'worldtrade@kaishing.com.hk': 'WTC'
     }
 
     # Clean and enrich
