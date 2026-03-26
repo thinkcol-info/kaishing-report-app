@@ -50,9 +50,17 @@ def filter_df_by_range(df, start_date, end_date, date_col='createdAt'):
 
 
 def build_figures_and_render(account_df, usage_df, askai_df, transcription_df, site_code_map):
-    subscription_counts = account_df['subscription_level'].value_counts(dropna=False)
-    pro_users = subscription_counts.get('pro', 0)
-    team_users = subscription_counts.get('team', 0)
+    # subscription_counts = account_df['subscription_level'].value_counts(dropna=False)
+    # pro_users = subscription_counts.get('pro', 0)
+    # team_users = subscription_counts.get('team', 0)
+    # total_accounts = pro_users + team_users
+    if not account_df.empty and 'subscription_level' in account_df.columns:
+        subscription_counts = account_df['subscription_level'].value_counts(dropna=False)
+        pro_users = subscription_counts.get('pro', 0)
+        team_users = subscription_counts.get('team', 0)
+    else:
+        pro_users = 0
+        team_users = 0
     total_accounts = pro_users + team_users
 
     st.subheader("Overall Platform Statistics")
@@ -65,6 +73,7 @@ def build_figures_and_render(account_df, usage_df, askai_df, transcription_df, s
     # Figures to reuse for exports
     fig_wau = go.Figure()
     fig_heatmap = go.Figure()
+    fig_site_activity = go.Figure()
 
     if not usage_df.empty:
         hkt = 'Asia/Hong_Kong'
@@ -119,7 +128,6 @@ def build_figures_and_render(account_df, usage_df, askai_df, transcription_df, s
         )
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-        fig_site_activity = go.Figure()
         if not usage_df.empty and not account_df.empty:
         # Mimic build_summary_df logic to count only matched activities per account
         # Step 1: Get accounts
